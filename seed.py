@@ -1,8 +1,8 @@
 import uuid
 import os
 import pandas as pd
-from sqlalchemy import create_engine, Column, String, Boolean, ForeignKey, Text
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy import create_engine, Column, String, Float, Integer, Boolean, ForeignKey, Text
+from sqlalchemy.orm import sessionmaker, declarative_base, relationship
 from sqlalchemy.dialects.postgresql import UUID
 
 # --- Configuration ---
@@ -48,6 +48,7 @@ class Question(Base):
     preferred_answer = Column(Text, nullable=True)
     
     subject_id = Column(UUID(as_uuid=True), ForeignKey('subjects.id'), nullable=False)
+    request_logs = relationship("RequestLog", back_populates="question")
 
     def __repr__(self):
         return f"<Question(id={self.id}, text='{self.question_text[:30]}...')>"
@@ -70,6 +71,28 @@ class TaskAnswer(Base):
 
     def __repr__(self):
         return f"<TaskAnswer(id={self.id}, student_id={self.student_id}, question_id={self.question_id})>"
+
+class RequestLog(Base):
+    """
+    Represents a log entry for a request made, including token counts.
+    """
+    __tablename__ = 'request_logs'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # Changed from DateTime to Float to store request duration in seconds
+    request_time = Column(Float, nullable=False)
+    question_count = Column(Integer, nullable=False)
+    prompt_token_count = Column(Integer, nullable=False)
+    candidates_token_count = Column(Integer, nullable=False)
+    total_token_count = Column(Integer, nullable=False)
+    
+    # Foreign Key to link to a specific question
+    question_id = Column(UUID(as_uuid=True), ForeignKey('questions.id'), nullable=False)
+    
+    # Relationship back to the Question model
+    question = relationship("Question", back_populates="request_logs")
+
+    def __repr__(self):
+        return f"<RequestLog(id={self.id}, question_id={self.question_id}, duration='{self.request_time}')>"
 
 
 # --- Seeding Logic ---
@@ -203,6 +226,7 @@ if __name__ == "__main__":
     try:
         if CLEAR_DATABASE_ON_START:
             print("CLEAR_DATABASE_ON_START is True. Deleting all existing data...")
+            db_session.query(RequestLog).delete()
             db_session.query(TaskAnswer).delete()
             db_session.query(Question).delete()
             db_session.query(Student).delete()
